@@ -1,5 +1,5 @@
 import torchvision
-from torchvision import datasets, models
+from torchvision import datasets, models, transforms
 import torch.utils.data
 import torch.nn as nn
 from torch import optim
@@ -20,7 +20,7 @@ def preprocess_data(image_dir, batch_size = 30):
         transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))])
 
     train_dataset = torchvision.datasets.ImageFolder(train_dir, transform = data_transforms)
-    trainloader = torch.utils.data.DataLoader(train_datasets, batch_size = batch_size)
+    trainloader = torch.utils.data.DataLoader(train_dataset, batch_size = batch_size)
     
     test_transform = transforms.Compose([
         transforms.CenterCrop(224),
@@ -30,8 +30,8 @@ def preprocess_data(image_dir, batch_size = 30):
     valid_dataset = torchvision.datasets.ImageFolder(valid_dir, transform = test_transform)
     test_dataset = torchvision.datasets.ImageFolder(test_dir, transform = test_transform)
     
-    validloader = torch.utils.data.DataLoader(valid_datasets, batch_size = batch_size)
-    testloader = torch.utils.data.DataLoader(test_datasets, batch_size = batch_size)
+    validloader = torch.utils.data.DataLoader(valid_dataset, batch_size = batch_size)
+    testloader = torch.utils.data.DataLoader(test_dataset, batch_size = batch_size)
     
     class_to_idx = train_dataset.class_to_idx
     
