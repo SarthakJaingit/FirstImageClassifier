@@ -20,7 +20,7 @@ def preprocess_data(image_dir, batch_size = 30):
         transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))])
 
     train_dataset = torchvision.datasets.ImageFolder(train_dir, transform = data_transforms)
-    trainloader = torch.utils.data.DataLoader(train_dataset, batch_size = batch_size)
+    trainloader = torch.utils.data.DataLoader(train_dataset, batch_size = batch_size, shuffle = True)
     
     test_transform = transforms.Compose([
         transforms.CenterCrop(224),
@@ -84,7 +84,7 @@ def assess_model(test_loader, model, device):
         accuracy = torch.mean(equality.type(torch.cuda.FloatTensor)).item()
         
         
-    print("Accuracy:", str(accuracy))
+    print("Test Accuracy:", str(accuracy))
     
 
 def train(epochs, train_loader, valid_loader, test_loader, lr, device, class_to_idx, hidden_units, arch):
@@ -101,13 +101,16 @@ def train(epochs, train_loader, valid_loader, test_loader, lr, device, class_to_
     criterion = nn.NLLLoss()
     optimizer = optim.Adam(model.classifier.parameters(), lr = lr)
     
+    steps = 0
+    print_every = 40
+    
+    
     for epoch in range(1, epochs + 1):
-        train_loss = 0
-        valid_loss = 0
-        
-        model.train()
+        cumulative_train_loss = 0
+
         for batch_idx, (image, label) in enumerate(train_loader):
             
+            steps += 1
             image, label = image.to(device), label.to(device)
             
             optimizer.zero_grad()
@@ -116,21 +119,38 @@ def train(epochs, train_loader, valid_loader, test_loader, lr, device, class_to_
             loss.backward()
             optimizer.step()
             
-            train_loss += loss.item()
+            cumulative_train_loss += loss.item()
             
-            
-        model.eval()
-        for image, label in valid_loader:
-            
-            image, label = image.to(device), label.to(device)
-            output = model(image)
-            loss = criterion(output, label)
-            
-            valid_loss += loss.item()
+            if (steps % print_every) == 0:
                 
-        print("train_loss:", str(train_loss))
-        print("valid_loss:", str(valid_loss))
-    
+                model.eval()
+                with torch.no_grad():
+                    cumulative_valid_loss = 0
+                    cumulative_valid_accuracy = 0
+                    
+                    for image, label in valid_loader:
+            
+                        image, label = image.to(device), label.to(device)
+                        output = model(image)
+                    
+                        loss = criterion(output, label)
+                        cumulative_valid_loss += loss.item()
+                        
+                        prob = torch.exp(output)
+                        top_prob, top_class = prob.topk(1, dim = 1)
+                        equality = top_class == label.view(*top_class.shape)
+                        cumulative_valid_accuracy += torch.mean(equality.type(torch.cuda.FloatTensor)).item()
+                        
+                #Print out loss and accuracy after 40 batches and reset training losses
+                    
+                print("Epoch: {} / {}".format(epoch, epochs))
+                print("Train Loss: {}".format(cumulative_train_loss / print_every))
+                print("Valid Loss: {}".format(cumulative_valid_loss / len(valid_loader)))
+                print("Valid accuracy: {}%".format(cumulative_valid_accuracy / len(valid_loader) * 100))
+                                
+                cumulative_train_loss = 0
+                model.train()
+                    
     model.class_to_idx = class_to_idx
     print("Training is finished")
     print("Model is being assesed")
@@ -156,7 +176,7 @@ def main():
     parser.add_argument("data_dir", type = str, help = "The data directory with the test, train, and valid folders")
     parser.add_argument("-a", "--arch", action = "store", type = str, help = "The torchvision model [alexnet, densenet161, vgg16] def: vgg16")
     parser.add_argument("-e", "--epochs", action = "store", type = int, help = "The amount of epochs to train for def: 10")
-    parser.add_argument("-lr", "--learning_rate", action = "store", type = int, help = "The learning rate of model def: 0.001")
+    parser.add_argument("-lr", "--learning_rate", action = "store", type = float, help = "The learning rate of model def: 0.001")
     parser.add_argument("-H", "--hidden_units", action = "store", type = int, help = "The amount of hidden units def: 1000")
     parser.add_argument("-s", "--save_dir", action = "store", type = str, help = "The additional path to save the model artifacts, def: in worspace")
     parser.add_argument("-g", "--gpu", action = "store_true", help = "Gives the ability to move to cuda if available.")
